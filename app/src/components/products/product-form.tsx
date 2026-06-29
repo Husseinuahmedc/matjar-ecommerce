@@ -49,7 +49,7 @@ export default function ProductForm({ initialData, categories }: ProductFormProp
     lowStockThreshold: initialData?.lowStockThreshold || 5,
     sku: initialData?.sku || "",
     categoryId: initialData?.categoryId || "",
-    images: initialData?.images?.map((img) => img.url) || [],
+    images: initialData?.images?.map((img: { url: string }) => img.url) || [],
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {

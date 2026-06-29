@@ -19,6 +19,13 @@ export interface OrderItem {
   quantity: number;
   /** Price snapshot at the time the item was added to cart */
   unitPrice: number;
+  product: {
+    titleAr: string;
+    titleEn: string;
+    sku: string;
+    sellerId: string;
+    images: { url: string }[];
+  };
 }
 
 export interface Order {
@@ -26,12 +33,17 @@ export interface Order {
   buyerId: string;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
+  paymentIntentId?: string | null;
   subtotal: number;
   shippingCost: number;
   discount: number;
   total: number;
   shippingAddressId: string;
+  couponCode?: string | null;
   items: OrderItem[];
+  events: OrderEvent[];
+  shippingAddress: ShippingAddress;
+  buyer: { fullName: string; email: string; phone?: string };
   createdAt: Date;
   updatedAt: Date;
 }

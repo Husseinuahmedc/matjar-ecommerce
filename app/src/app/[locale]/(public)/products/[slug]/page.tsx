@@ -33,7 +33,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
             <ProductImage src={product.images?.[0]?.url} alt={title} fill className="object-cover" />
           </div>
           <div className="grid grid-cols-4 gap-4">
-            {product.images?.map((img, idx) => (
+            {product.images?.map((img: { url: string }, idx: number) => (
               <div key={idx} className="relative aspect-square bg-muted rounded-lg overflow-hidden border border-border/30 cursor-pointer hover:border-primary transition-colors">
                 <ProductImage src={img.url} alt="" fill className="object-cover" />
               </div>
@@ -86,7 +86,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
                   titleAr: product.titleAr,
                   titleEn: product.titleEn,
                   price: product.discountPrice ? Number(product.discountPrice) : Number(product.price),
-                  images: product.images.map((img) => ({ url: img.url }))
+                  images: product.images.map((img: { url: string }) => ({ url: img.url }))
                 }}
               />
             </div>

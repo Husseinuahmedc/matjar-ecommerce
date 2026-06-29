@@ -22,7 +22,7 @@ export default async function AdminProductsPage({ params, searchParams }: PagePr
   const isAr = locale === "ar"
 
   const { data: products } = await getProducts({
-    status: statuses,
+    status: filterStatus as any,
     limit: 50,
   })
 
@@ -124,12 +124,12 @@ export default async function AdminProductsPage({ params, searchParams }: PagePr
                       }`}
                     >
                       {isAr
-                        ? ({
+                        ? (({
                             PUBLISHED: "منشور",
                             PENDING: "قيد الانتظار",
                             REJECTED: "مرفوض",
                             DRAFT: "مسودة",
-                          }[product.status] || product.status)
+                          } as Record<string, string>)[product.status] || product.status)
                         : product.status}
                     </span>
                   </td>

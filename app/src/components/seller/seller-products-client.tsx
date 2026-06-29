@@ -259,7 +259,7 @@ export default function SellerProductsPageClient({ products, locale }: SellerPro
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[product.status] || ""}`}>
                       {isAr
-                        ? ({ PUBLISHED: "منشور", PENDING: "قيد الانتظار", REJECTED: "مرفوض", DRAFT: "مسودة" }[product.status] || product.status)
+                        ? (({ PUBLISHED: "منشور", PENDING: "قيد الانتظار", REJECTED: "مرفوض", DRAFT: "مسودة" } as Record<string, string>)[product.status] || product.status)
                         : product.status}
                     </span>
                     {product.status === "REJECTED" && (
