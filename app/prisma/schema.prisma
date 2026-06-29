@@ -1,0 +1,377 @@
+// This is your Prisma schema file.
+// Learn more: https://pris.ly/d/prisma-schema
+// Note (Prisma 7): Connection URLs are configured in prisma.config.ts — not here.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  SELLER
+  BUYER
+  SUPPORT
+}
+
+enum ProductStatus {
+  DRAFT
+  PENDING
+  PUBLISHED
+  REJECTED
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+
+model User {
+  /// Supabase Auth user ID — matches auth.users.id in Supabase
+  id        String   @id @default(cuid())
+  email     String   @unique
+  fullName  String
+  phone     String?
+  role      UserRole @default(BUYER)
+  rewardPoints Int   @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  products          Product[]
+  orders            Order[]
+  reviews           Review[]
+  shippingAddresses ShippingAddress[]
+  cart              Cart?
+  wishlist          Wishlist?
+  orderEvents       OrderEvent[]
+
+  @@map("users")
+}
+
+// ─── Category ─────────────────────────────────────────────────────────────────
+
+model Category {
+  id       String  @id @default(cuid())
+  nameAr   String
+  nameEn   String
+  slug     String  @unique
+  parentId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryHierarchy")
+  products Product[]
+
+  @@map("categories")
+}
+
+// ─── Product ──────────────────────────────────────────────────────────────────
+
+model Product {
+  id                String        @id @default(cuid())
+  titleAr           String
+  titleEn           String
+  descriptionAr     String
+  descriptionEn     String
+  slug              String        @unique
+  price             Decimal       @db.Decimal(10, 2)
+  discountPrice     Decimal?      @db.Decimal(10, 2)
+  stock             Int           @default(0)
+  lowStockThreshold Int           @default(5)
+  sku               String        @unique
+  status            ProductStatus @default(DRAFT)
+  isFeatured        Boolean       @default(false)
+  sellerId          String
+  categoryId        String
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  seller     User           @relation(fields: [sellerId], references: [id])
+  category   Category       @relation(fields: [categoryId], references: [id])
+  images     ProductImage[]
+  tags       Tag[]
+  reviews    Review[]
+  cartItems  CartItem[]
+  wishlistItems WishlistItem[]
+  orderItems OrderItem[]
+
+  // Index frequently queried fields
+  @@index([sellerId])
+  @@index([categoryId])
+  @@index([status])
+  @@map("products")
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  url       String
+  position  Int     @default(0)
+  isPrimary Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("product_images")
+}
+
+model Tag {
+  id       String    @id @default(cuid())
+  nameAr   String
+  nameEn   String
+  slug      String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
+
+  @@map("tags")
+}
+
+// ─── Cart ─────────────────────────────────────────────────────────────────────
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String     @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String  @id @default(cuid())
+  cartId    String
+  productId String
+  quantity  Int
+  /// Price snapshot at the time the item was added
+  unitPrice Decimal @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([cartId, productId])
+  @@map("cart_items")
+}
+
+// ─── Shipping Address ─────────────────────────────────────────────────────────
+
+model ShippingAddress {
+  id        String  @id @default(cuid())
+  userId    String
+  fullName  String
+  phone     String
+  city      String
+  country   String
+  street    String
+  isDefault Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@index([userId])
+  @@map("shipping_addresses")
+}
+
+// ─── Order ────────────────────────────────────────────────────────────────────
+
+model Order {
+  id              String        @id @default(cuid())
+  buyerId         String
+  status          OrderStatus   @default(PENDING)
+  paymentStatus   PaymentStatus @default(PENDING)
+  paymentIntentId String?       @unique // For idempotent webhook processing
+  subtotal        Decimal       @db.Decimal(10, 2)
+  shippingCost    Decimal       @db.Decimal(10, 2) @default(0)
+  discount        Decimal       @db.Decimal(10, 2) @default(0)
+  total           Decimal       @db.Decimal(10, 2)
+  shippingAddressId String
+  couponCode      String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  buyer           User            @relation(fields: [buyerId], references: [id])
+  shippingAddress ShippingAddress @relation(fields: [shippingAddressId], references: [id])
+  items           OrderItem[]
+  events          OrderEvent[]
+
+  @@index([buyerId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String
+  quantity  Int
+  /// Price snapshot at the time of purchase
+  unitPrice Decimal @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}
+
+/// Audit trail — every order status change is logged here.
+model OrderEvent {
+  id        String      @id @default(cuid())
+  orderId   String
+  status    OrderStatus
+  actorId   String
+  note      String?
+  createdAt DateTime    @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  actor User  @relation(fields: [actorId], references: [id])
+
+  @@index([orderId])
+  @@map("order_events")
+}
+
+// ─── Review ───────────────────────────────────────────────────────────────────
+
+model Review {
+  id        String       @id @default(cuid())
+  productId String
+  buyerId   String
+  rating    Int // 1–5
+  title     String?
+  body      String?
+  status    ReviewStatus @default(PENDING)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  buyer   User    @relation(fields: [buyerId], references: [id])
+
+  // One review per buyer per product
+  @@unique([productId, buyerId])
+  @@index([productId])
+  @@map("reviews")
+}
+
+// ─── Wishlist ─────────────────────────────────────────────────────────────────
+
+model Wishlist {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items WishlistItem[]
+
+  @@map("wishlists")
+}
+
+model WishlistItem {
+  id         String   @id @default(cuid())
+  wishlistId String
+  productId  String
+  createdAt  DateTime @default(now())
+
+  wishlist Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([wishlistId, productId])
+  @@map("wishlist_items")
+}
+
+// ─── Rate Limiting ────────────────────────────────────────────────────────────
+
+/// DB-backed rate limit window per key (ip:action or phone:action).
+/// Replaces the in-memory Map that doesn't work on serverless/multi-instance.
+model RateLimit {
+  id          String   @id @default(cuid())
+  key         String   /// e.g. "login:ip:1.2.3.4" or "otp:phone:+964..."
+  action      String   /// e.g. "login", "otp_send", "password_reset"
+  count       Int      @default(1)
+  windowStart DateTime @default(now())
+  blockedUntil DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([key, action])
+  @@index([key])
+  @@index([windowStart])
+  @@map("rate_limits")
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+
+/// Immutable audit trail for all auth events.
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?  /// null for failed attempts where user is unknown
+  action    String   /// e.g. "login_success", "login_failed", "password_reset", "email_verified"
+  ip        String?
+  userAgent String?
+  metadata  Json?    /// arbitrary extra context (role, email, reason, etc.)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ─── Phone OTP ────────────────────────────────────────────────────────────────
+
+model PhoneOtp {
+  id             String    @id @default(cuid())
+  phone          String
+  otpHash        String
+  expiresAt      DateTime
+  attempts       Int       @default(0)
+  verified       Boolean   @default(false)
+  verifiedToken  String?
+  tokenExpiresAt DateTime?
+  requestCount   Int       @default(1)
+  windowStart    DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([phone])
+  @@map("phone_otps")
+}
